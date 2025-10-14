@@ -10,6 +10,7 @@
   "intermediate": {
     "cert_path": "data/intermediate.crt",
     "key_path": "data/intermediate.key",
+    "key_password": "",
     "chain_path": "data/chain.pem",
     "default_profile": "server-tls"
   },
