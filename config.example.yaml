@@ -1,0 +1,30 @@
+{
+  "bind_address": "127.0.0.1:8443",
+  "tls": {
+    "cert_path": "data/ui-cert.pem",
+    "key_path": "data/ui-key.pem"
+  },
+  "database": {
+    "path": "data/certificates.jsonl"
+  },
+  "intermediate": {
+    "cert_path": "data/intermediate.crt",
+    "key_path": "data/intermediate.key",
+    "chain_path": "data/chain.pem",
+    "default_profile": "server-tls"
+  },
+  "profiles": {
+    "server-tls": {
+      "name": "server-tls",
+      "validity_days": 90,
+      "key_usage": ["digitalSignature"],
+      "ext_key_usage": ["serverAuth"]
+    },
+    "mtls-client": {
+      "name": "mtls-client",
+      "validity_days": 180,
+      "key_usage": ["digitalSignature"],
+      "ext_key_usage": ["clientAuth"]
+    }
+  }
+}
