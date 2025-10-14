@@ -1,22 +1,25 @@
 package pki
 
 import (
+	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"strings"
 	"time"
 )
 
 // LoadCertificate loads a PEM encoded certificate from disk.
 func LoadCertificate(path string) (*x509.Certificate, error) {
-	pemBytes, err := ioutil.ReadFile(path)
+	pemBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read cert: %w", err)
 	}
@@ -31,9 +34,10 @@ func LoadCertificate(path string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-// LoadECPrivateKey loads an ECDSA private key from PEM. Only unencrypted keys are supported for MVP.
-func LoadECPrivateKey(path string) (*ecdsa.PrivateKey, error) {
-	pemBytes, err := ioutil.ReadFile(path)
+// LoadPrivateKey loads a PEM encoded private key, supporting EC, RSA and Ed25519 keys in PKCS#1/SEC1/PKCS#8 formats.
+// If the PEM block is encrypted a password must be supplied.
+func LoadPrivateKey(path, password string) (crypto.Signer, error) {
+	pemBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read key: %w", err)
 	}
@@ -41,25 +45,77 @@ func LoadECPrivateKey(path string) (*ecdsa.PrivateKey, error) {
 	if block == nil {
 		return nil, errors.New("invalid key pem")
 	}
+	der := block.Bytes
 	if x509.IsEncryptedPEMBlock(block) {
-		return nil, errors.New("encrypted keys are not supported in this MVP")
+		if password == "" {
+			return nil, errors.New("key is encrypted but no password provided")
+		}
+		der, err = x509.DecryptPEMBlock(block, []byte(password))
+		if err != nil {
+			return nil, fmt.Errorf("decrypt key: %w", err)
+		}
 	}
-	key, err := x509.ParseECPrivateKey(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse ecdsa key: %w", err)
+	return parsePrivateKey(block.Type, der)
+}
+
+func parsePrivateKey(blockType string, der []byte) (crypto.Signer, error) {
+	switch blockType {
+	case "EC PRIVATE KEY":
+		key, err := x509.ParseECPrivateKey(der)
+		if err != nil {
+			return nil, fmt.Errorf("parse ec private key: %w", err)
+		}
+		return key, nil
+	case "RSA PRIVATE KEY":
+		key, err := x509.ParsePKCS1PrivateKey(der)
+		if err != nil {
+			return nil, fmt.Errorf("parse rsa private key: %w", err)
+		}
+		return key, nil
+	case "PRIVATE KEY":
+		key, err := x509.ParsePKCS8PrivateKey(der)
+		if err != nil {
+			return nil, fmt.Errorf("parse pkcs8 private key: %w", err)
+		}
+		switch k := key.(type) {
+		case *ecdsa.PrivateKey:
+			return k, nil
+		case *rsa.PrivateKey:
+			return k, nil
+		case ed25519.PrivateKey:
+			return k, nil
+		default:
+			return nil, fmt.Errorf("unsupported pkcs8 key type %T", key)
+		}
+	default:
+		// Some tools emit encrypted blocks with the generic type even for EC/RSA keys.
+		// Try PKCS#8 as a sensible default fallback.
+		key, err := x509.ParsePKCS8PrivateKey(der)
+		if err != nil {
+			return nil, fmt.Errorf("unsupported key type %q: %w", blockType, err)
+		}
+		switch k := key.(type) {
+		case *ecdsa.PrivateKey:
+			return k, nil
+		case *rsa.PrivateKey:
+			return k, nil
+		case ed25519.PrivateKey:
+			return k, nil
+		default:
+			return nil, fmt.Errorf("unsupported key type %T", key)
+		}
 	}
-	return key, nil
 }
 
 // Signer issues certificates using an intermediate CA.
 type Signer struct {
 	caCert *x509.Certificate
-	caKey  *ecdsa.PrivateKey
+	caKey  crypto.Signer
 	chain  [][]byte
 }
 
 // NewSigner creates a signer using the intermediate certificate, private key, and optional chain.
-func NewSigner(caCert *x509.Certificate, caKey *ecdsa.PrivateKey, chain [][]byte) *Signer {
+func NewSigner(caCert *x509.Certificate, caKey crypto.Signer, chain [][]byte) *Signer {
 	return &Signer{caCert: caCert, caKey: caKey, chain: chain}
 }
 

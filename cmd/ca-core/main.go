@@ -47,7 +47,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("load intermediate cert: %v", err)
 	}
-	intermediateKey, err := pki.LoadECPrivateKey(cfg.Intermediate.KeyPath)
+	intermediateKey, err := pki.LoadPrivateKey(cfg.Intermediate.KeyPath, cfg.Intermediate.KeyPassword)
 	if err != nil {
 		log.Fatalf("load intermediate key: %v", err)
 	}

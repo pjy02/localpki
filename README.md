@@ -6,6 +6,7 @@
 
 - **离线根 CA 管理**：`pki-offline` CLI 支持生成根 CA 以及使用根证书签发中级 CA。
 - **在线签发服务**：`ca-core` 提供 HTTPS API，可上传 CSR 并按照策略模板签发终端证书，同时将审计信息写入 JSONL 日志。
+- **密钥兼容性**：中级 CA 私钥支持 ECDSA、RSA、Ed25519，兼容 PKCS#1/SEC1/PKCS#8（含密码保护）。
 - **安全默认**：仅监听 `127.0.0.1`，强制 TLS、限制最低协议版本、附带基础安全响应头。
 - **配置化策略**：通过 YAML 配置定义证书模板（有效期、KU/EKU 等）。
 
@@ -39,7 +40,7 @@
    go run ./cmd/ca-core --config config.yaml --generate-ui-cert
    ```
 
-   启动后访问 `https://127.0.0.1:8443/api/v1/health` 即可验证运行状态。`--generate-ui-cert` 仅在首次运行时为 `localhost` 生成临时证书，生产环境应使用中级 CA 为 UI 颁发证书。
+   启动后访问 `https://127.0.0.1:8443/api/v1/health` 即可验证运行状态。`--generate-ui-cert` 仅在首次运行时为 `localhost` 生成临时证书，生产环境应使用中级 CA 为 UI 颁发证书。若中级私钥为加密 PEM，可在 `config.yaml` 的 `intermediate.key_password` 中写入密码。
 
 4. **签发终端证书**
 
