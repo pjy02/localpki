@@ -31,7 +31,10 @@
   "security": {
     "rp_name": "LocalPKI",
     "rp_id": "localhost",
-    "rp_origins": ["https://localhost:8443"],
+    "rp_origins": [
+      "https://localhost:8443",
+      "https://127.0.0.1:8443"
+    ],
     "session_minutes": 30
   },
   "acme": {
