@@ -1,20 +1,21 @@
 package pki
 
 import (
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha1"
-	"crypto/x509"
-	"encoding/pem"
-	"errors"
-	"fmt"
-	"math/big"
-	"os"
-	"strings"
-	"time"
+    "crypto"
+    "crypto/ecdsa"
+    "crypto/ed25519"
+    "crypto/rand"
+    "crypto/rsa"
+    "crypto/sha1"
+    "crypto/x509"
+    "crypto/x509/pkix"
+    "encoding/pem"
+    "errors"
+    "fmt"
+    "math/big"
+    "os"
+    "strings"
+    "time"
 )
 
 // LoadCertificate loads a PEM encoded certificate from disk.
@@ -157,6 +158,28 @@ func (s *Signer) SignCSR(csr *x509.CertificateRequest, profile Profile) ([]byte,
 	}
 	chain := append([][]byte{certDER}, s.chain...)
 	return certDER, chain, nil
+}
+
+// CACertificate returns the intermediate CA certificate used for signing.
+func (s *Signer) CACertificate() *x509.Certificate {
+    return s.caCert
+}
+
+// CAKey exposes the intermediate private key for advanced operations (CRL/OCSP).
+func (s *Signer) CAKey() crypto.Signer {
+    return s.caKey
+}
+
+// GenerateCRL builds a DER encoded certificate revocation list for the provided entries.
+func (s *Signer) GenerateCRL(revoked []pkix.RevokedCertificate, number *big.Int, thisUpdate, nextUpdate time.Time) ([]byte, error) {
+    tmpl := &x509.RevocationList{
+        SignatureAlgorithm:  s.caCert.SignatureAlgorithm,
+        RevokedCertificates: revoked,
+        Number:              number,
+        ThisUpdate:          thisUpdate,
+        NextUpdate:          nextUpdate,
+    }
+    return x509.CreateRevocationList(rand.Reader, tmpl, s.caCert, s.caKey)
 }
 
 func randomSerialNumber() (*big.Int, error) {

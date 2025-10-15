@@ -1,0 +1,48 @@
+{{define "certificates"}}
+<div class="overflow-x-auto">
+  <table class="min-w-full text-sm">
+    <thead class="text-slate-300 uppercase tracking-wide text-xs">
+      <tr class="border-b border-slate-800">
+        <th class="px-3 py-2 text-left">序列号</th>
+        <th class="px-3 py-2 text-left">主题</th>
+        <th class="px-3 py-2 text-left">SAN</th>
+        <th class="px-3 py-2 text-left">有效期</th>
+        <th class="px-3 py-2 text-left">状态</th>
+        <th class="px-3 py-2 text-left">操作</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-800">
+      {{range .Certificates}}
+      <tr>
+        <td class="px-3 py-2 font-mono text-xs break-all">{{.Serial}}</td>
+        <td class="px-3 py-2">{{.Subject}}</td>
+        <td class="px-3 py-2 text-xs text-slate-300">{{.SAN}}</td>
+        <td class="px-3 py-2 text-xs">{{formatTime .NotBefore}} → {{formatTime .NotAfter}}</td>
+        <td class="px-3 py-2">
+          {{if eq .Status "revoked"}}
+          <span class="text-red-300">已吊销</span>
+          {{else}}
+          <span class="text-emerald-300">有效</span>
+          {{end}}
+        </td>
+        <td class="px-3 py-2">
+          {{if ne .Status "revoked"}}
+          <form hx-post="/ui/certificates/revoke" hx-target="#cert-table" hx-confirm="确认吊销该证书？" class="inline">
+            <input type="hidden" name="csrf" value="{{$.CSRF}}">
+            <input type="hidden" name="serial" value="{{.Serial}}">
+            <button class="text-xs text-red-300 hover:text-red-100">吊销</button>
+          </form>
+          {{else}}
+          <span class="text-xs text-slate-500">-</span>
+          {{end}}
+        </td>
+      </tr>
+      {{else}}
+      <tr>
+        <td class="px-3 py-6 text-center text-slate-500" colspan="6">暂无记录</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{end}}

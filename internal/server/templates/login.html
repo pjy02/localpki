@@ -1,0 +1,84 @@
+{{define "login"}}{{template "layout" .}}{{end}}
+{{define "body"}}
+<div class="max-w-md mx-auto bg-slate-900/70 rounded-xl shadow-lg p-8 space-y-6">
+  <div>
+    <h1 class="text-2xl font-semibold">LocalPKI 管理登录</h1>
+    <p class="text-sm text-slate-300 mt-1">使用 TOTP 或 WebAuthn Passkey 进行安全登录。</p>
+  </div>
+  {{if .Flash}}
+  <div class="bg-red-500/20 border border-red-500/40 text-sm text-red-200 rounded-md px-3 py-2">{{.Flash}}</div>
+  {{end}}
+  <form method="post" action="/login" class="space-y-4" hx-boost="true">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div>
+      <label class="block text-sm font-medium mb-1" for="username">用户名</label>
+      <input class="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 focus:outline-none focus:ring focus:ring-emerald-500/40" name="username" id="username" autocomplete="username" required>
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1" for="totp">TOTP 动态码</label>
+      <input class="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 focus:outline-none focus:ring focus:ring-emerald-500/40" name="totp" id="totp" inputmode="numeric" pattern="[0-9]{6}" placeholder="000000">
+    </div>
+    <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold rounded-md py-2 transition">登录</button>
+  </form>
+  <div class="border-t border-slate-700 pt-4 space-y-3">
+    <h2 class="text-sm font-semibold uppercase tracking-widest text-slate-300">或使用 Passkey</h2>
+    <button id="passkey-login" class="w-full border border-emerald-400/60 text-emerald-200 hover:bg-emerald-500/10 rounded-md py-2" data-begin="/auth/webauthn/begin-login" data-finish="/auth/webauthn/finish-login">使用 Passkey 登录</button>
+  </div>
+  {{if .ProvisioningURL}}
+  <div class="border border-slate-700 rounded-md p-3 text-sm space-y-2">
+    <p class="font-semibold text-emerald-300">首次使用？</p>
+    <p>扫描下方二维码或手动添加密钥以配置 TOTP：</p>
+    {{if .QRCode}}
+    <div class="bg-white p-3 rounded-md">
+      <img src="{{.QRCode}}" alt="TOTP QR Code" class="mx-auto">
+    </div>
+    {{end}}
+    <p class="break-all text-xs text-slate-400">{{.ProvisioningURL}}</p>
+  </div>
+  {{end}}
+</div>
+<script>
+async function bufferDecode(value){return Uint8Array.from(atob(value.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));}
+async function bufferEncode(buffer){return btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+async function beginPasskey(button){
+  try{
+    const begin = await fetch(button.dataset.begin,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:document.getElementById('username').value})});
+    if(!begin.ok){throw new Error('无法启动 WebAuthn');}
+    const opts = await begin.json();
+    opts.publicKey.challenge = await bufferDecode(opts.publicKey.challenge);
+    if(opts.publicKey.user){opts.publicKey.user.id = await bufferDecode(opts.publicKey.user.id);}    
+    if(opts.publicKey.allowCredentials){
+      opts.publicKey.allowCredentials = opts.publicKey.allowCredentials.map(c=>({type:c.type,id:Uint8Array.from(atob(c.id.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0)),transports:c.transports||[]}));
+    }
+    let credential;
+    if(opts.mode === 'register'){
+      credential = await navigator.credentials.create(opts);
+    }else{
+      credential = await navigator.credentials.get(opts);
+    }
+    const response = {
+      id: credential.id,
+      rawId: await bufferEncode(credential.rawId),
+      type: credential.type,
+      response:{}
+    };
+    if(opts.mode === 'register'){
+      response.response.attestationObject = await bufferEncode(credential.response.attestationObject);
+      response.response.clientDataJSON = await bufferEncode(credential.response.clientDataJSON);
+    }else{
+      response.response.authenticatorData = await bufferEncode(credential.response.authenticatorData);
+      response.response.clientDataJSON = await bufferEncode(credential.response.clientDataJSON);
+      response.response.signature = await bufferEncode(credential.response.signature);
+      if(credential.response.userHandle){response.response.userHandle = await bufferEncode(credential.response.userHandle);}    
+    }
+    const finish = await fetch(button.dataset.finish,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(response)});
+    if(!finish.ok){throw new Error('Passkey 认证失败');}
+    window.location.href = '/ui';
+  }catch(err){
+    alert(err.message);
+  }
+}
+const passkeyBtn = document.getElementById('passkey-login');
+if(passkeyBtn){passkeyBtn.addEventListener('click',()=>beginPasskey(passkeyBtn));}
+</script>
+{{end}}

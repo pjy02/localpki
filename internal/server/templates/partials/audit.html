@@ -1,0 +1,20 @@
+{{define "audit"}}
+<div class="space-y-3">
+  {{range .Audit}}
+  <div class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 text-sm">
+    <div class="flex items-center justify-between text-xs text-slate-400">
+      <span>{{formatTime .Timestamp}}</span>
+      <span>Prev: {{.PrevHash}}</span>
+    </div>
+    <div class="mt-2"><span class="font-semibold text-emerald-200">{{.Actor}}</span> {{.Action}} <span class="text-slate-200">{{.Target}}</span></div>
+    {{if .IP}}<div class="text-xs text-slate-400">来源 IP: {{.IP}}</div>{{end}}
+    {{if .Payload}}
+    <pre class="mt-2 bg-slate-950/60 rounded-md p-2 text-xs overflow-x-auto">{{stringify .Payload}}</pre>
+    {{end}}
+    <div class="text-xs text-slate-500 mt-1 break-all">Hash: {{.Hash}}</div>
+  </div>
+  {{else}}
+  <p class="text-slate-500 text-sm">暂无审计记录。</p>
+  {{end}}
+</div>
+{{end}}

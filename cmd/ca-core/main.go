@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"localpki/internal/acme"
 	"localpki/internal/config"
 	"localpki/internal/pki"
 	"localpki/internal/server"
@@ -67,11 +68,46 @@ func main() {
 		log.Fatalf("open database: %v", err)
 	}
 
-	api := &server.API{
-		Signer:         signer,
-		Profiles:       toPKIProfiles(cfg),
-		DefaultProfile: cfg.Intermediate.DefaultProfile,
-		Store:          store,
+	templates, err := server.LoadTemplates()
+	if err != nil {
+		log.Fatalf("load templates: %v", err)
+	}
+
+	api := server.NewAPI()
+	api.Signer = signer
+	api.Profiles = toPKIProfiles(cfg)
+	api.DefaultProfile = cfg.Intermediate.DefaultProfile
+	api.Store = store
+	api.Templates = templates
+	api.SessionDuration = time.Duration(cfg.Security.SessionMinutes) * time.Minute
+	api.RP = server.RelyingPartyConfig{
+		ID:      cfg.Security.RPID,
+		Name:    cfg.Security.RPName,
+		Origins: cfg.Security.RPOrigins,
+	}
+
+	if account, created, err := store.EnsureAdminUser(context.Background(), server.GenerateTOTPSecret); err == nil {
+		if created {
+			api.SetBootstrapSecret(account.TOTPSecret)
+			log.Printf("bootstrap admin TOTP secret: %s", account.TOTPSecret)
+		}
+	} else {
+		log.Fatalf("ensure admin user: %v", err)
+	}
+
+	if cfg.ACME.Enabled {
+		acmeSrv := &acme.Server{
+			Signer:         signer,
+			Profiles:       api.Profiles,
+			DefaultProfile: cfg.ACME.DefaultProfile,
+			Store:          store,
+			BasePath:       cfg.ACME.BasePath,
+			Nonces:         acme.NewNonceManager(time.Minute),
+		}
+		acmeSrv.Audit = func(ctx context.Context, entry storage.AuditEntry) error {
+			return api.Store.AppendAudit(ctx, entry)
+		}
+		api.ACME = acmeSrv
 	}
 
 	mux := http.NewServeMux()

@@ -1,0 +1,65 @@
+{{define "dashboard"}}{{template "layout" .}}{{end}}
+{{define "body"}}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-3xl font-semibold">LocalPKI 控制面板</h1>
+    <p class="text-sm text-slate-300">管理证书签发、吊销、审计日志与自动化接口。</p>
+  </div>
+  <div class="flex items-center space-x-3">
+    <a href="/ui/totp" class="text-sm text-emerald-300 hover:text-emerald-200">TOTP 设置</a>
+    <a href="/ui/passkey" class="text-sm text-emerald-300 hover:text-emerald-200">Passkey</a>
+    <form method="post" action="/logout">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button class="text-sm text-red-300 hover:text-red-200">退出</button>
+    </form>
+  </div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 space-y-6">
+    <section class="bg-slate-900/70 rounded-xl border border-slate-800 shadow p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold">签发证书</h2>
+        <button class="text-sm text-emerald-300 hover:text-emerald-200" hx-get="/ui/certificates" hx-target="#cert-table" hx-trigger="click">刷新列表</button>
+      </div>
+      <form id="sign-form" hx-post="/ui/certificates/sign" hx-target="#sign-result" hx-swap="innerHTML" class="space-y-4">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <div>
+          <label class="block text-sm font-medium mb-1" for="profile">签发模板</label>
+          <select id="profile" name="profile" class="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2">
+            {{range .Profiles}}
+            <option value="{{.}}">{{.}}</option>
+            {{end}}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1" for="csr">CSR (PEM)</label>
+          <textarea id="csr" name="csr" rows="6" class="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 font-mono text-sm" placeholder="-----BEGIN CERTIFICATE REQUEST-----"></textarea>
+        </div>
+        <button type="submit" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md">签发证书</button>
+      </form>
+      <div id="sign-result" class="mt-4 text-sm text-emerald-200"></div>
+    </section>
+    <section class="bg-slate-900/70 rounded-xl border border-slate-800 shadow p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold">审计日志</h2>
+        <button class="text-sm text-emerald-300 hover:text-emerald-200" hx-get="/ui/audit" hx-target="#audit-log" hx-trigger="click">刷新</button>
+      </div>
+      <div id="audit-log" hx-get="/ui/audit" hx-trigger="load" hx-target="#audit-log"></div>
+    </section>
+  </div>
+  <div class="space-y-6">
+    <section class="bg-slate-900/70 rounded-xl border border-slate-800 shadow p-5">
+      <h2 class="text-lg font-semibold mb-3">签发历史</h2>
+      <div id="cert-table" hx-get="/ui/certificates" hx-trigger="load" hx-target="#cert-table"></div>
+    </section>
+    <section class="bg-slate-900/70 rounded-xl border border-slate-800 shadow p-5">
+      <h2 class="text-lg font-semibold mb-3">CRL / OCSP / ACME</h2>
+      <ul class="text-sm text-slate-300 space-y-2">
+        <li><span class="font-semibold text-emerald-200">CRL:</span> <a class="text-emerald-300 hover:text-emerald-100" href="/crl" target="_blank">下载最新 CRL</a></li>
+        <li><span class="font-semibold text-emerald-200">OCSP:</span> POST 到 <code class="text-xs">/ocsp</code></li>
+        <li><span class="font-semibold text-emerald-200">ACME 目录:</span> <code class="text-xs">{{.ACMEDirectory}}</code></li>
+      </ul>
+    </section>
+  </div>
+</div>
+{{end}}
