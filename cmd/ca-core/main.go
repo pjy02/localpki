@@ -18,7 +18,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 
 	"localpki/internal/acme"
@@ -121,11 +120,11 @@ func main() {
 		},
 	}
 
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), shutdownSignals()...)
+	defer stop()
 
 	go func() {
-		<-done
+		<-shutdownCtx.Done()
 		log.Println("shutting down...")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

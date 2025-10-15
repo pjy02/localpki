@@ -71,6 +71,45 @@
 
    默认配置示例涵盖 `server-tls`、`client-mtls` 等模板，可按需扩展。`--generate-ui-cert` 会为本地开发生成临时 UI 证书，生产环境应替换为由中级 CA 签发的正式证书。
 
+## 在 Windows 上运行 Web 管理界面
+
+以下步骤以 PowerShell 为例，演示如何在 Windows 10/11 上启动带有 Web UI 的在线签发服务：
+
+1. [安装 Go 1.21+](https://go.dev/dl/) 并确保在 PowerShell 中可以执行 `go version`。
+2. 克隆或下载本仓库，进入项目根目录：
+
+   ```powershell
+   git clone <仓库地址>
+   Set-Location .\localpki
+   ```
+
+3. 创建数据目录并复制配置文件：
+
+   ```powershell
+   New-Item -ItemType Directory -Force -Path .\data,.\logs,.\secrets | Out-Null
+   Copy-Item .\config.example.yaml .\config.yaml -Force
+   ```
+
+   `config.yaml` 中的相对路径在 Windows 下同样有效，如需自定义路径可直接写入绝对路径（例如 `C:\pki\data\ui-cert.pem`）。
+
+4. 首次体验可让程序自动生成用于 Web UI 的临时 TLS 证书，并在日志中输出管理员的 TOTP 初始密钥：
+
+   ```powershell
+   go run .\cmd\ca-core --config .\config.yaml --generate-ui-cert
+   ```
+
+   首次启动时请记录控制台输出的 `bootstrap admin TOTP secret`，使用任意 TOTP 应用（如 Microsoft Authenticator、Aegis 等）录入即可。
+
+5. 在浏览器中访问 `https://127.0.0.1:8443/ui`。浏览器可能会提示自签名证书风险，可选择继续访问。使用默认管理员账户（用户名 `admin`）以及 TOTP 动态码登录，即可通过 Web 界面管理证书的签发、吊销及审计日志。
+
+6. 若需在 Windows 上运行离线工具，可执行：
+
+   ```powershell
+   go run .\cmd\pki-offline --help
+   ```
+
+   CLI 的参数与 Linux/macOS 相同，可配合 PowerShell 或 WSL 生成、签发离线证书。
+
 5. **健康检查与 API 调用**
 
    - 访问 `https://127.0.0.1:8443/api/v1/health` 验证服务状态。
