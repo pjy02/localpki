@@ -30,7 +30,7 @@ go run ./cmd/ca-core --demo
 
 - 在临时目录中生成根 CA、中级 CA 与 UI 所需的 TLS 证书；
 - 建立默认的 `server-tls`、`client-mtls` 模板；
-- 输出管理员初始 TOTP 秘钥以及根证书文件路径（按提示导入系统信任即可）。
+- 输出管理员初始登录密码以及根证书文件路径（按提示导入系统信任即可）。
 
 Demo 模式的数据存放在系统临时目录下，进程退出后可手动删除，无需额外清理。如果后续需要生产使用，请按照下一节准备正式配置与密钥材料。
 
@@ -108,15 +108,15 @@ Demo 模式的数据存放在系统临时目录下，进程退出后可手动删
 
    `config.yaml` 中的相对路径在 Windows 下同样有效，如需自定义路径可直接写入绝对路径（例如 `C:\pki\data\ui-cert.pem`）。
 
-4. 首次体验可让程序自动生成用于 Web UI 的临时 TLS 证书，并在日志中输出管理员的 TOTP 初始密钥：
+4. 首次体验可让程序自动生成用于 Web UI 的临时 TLS 证书，并在日志中输出管理员的初始密码：
 
    ```powershell
    go run .\cmd\ca-core --config .\config.yaml --generate-ui-cert
    ```
 
-   首次启动时请记录控制台输出的 `bootstrap admin TOTP secret`，使用任意 TOTP 应用（如 Microsoft Authenticator、Aegis 等）录入即可。
+   首次启动时请记录控制台输出的 `bootstrap admin password`，使用该口令完成首次登录并及时修改。
 
-5. 在浏览器中访问 `https://127.0.0.1:8443/ui`。浏览器可能会提示自签名证书风险，可选择继续访问。使用默认管理员账户（用户名 `admin`）以及 TOTP 动态码登录，即可通过 Web 界面管理证书的签发、吊销及审计日志。
+5. 在浏览器中访问 `https://127.0.0.1:8443/ui`。浏览器可能会提示自签名证书风险，可选择继续访问。使用默认管理员账户（用户名 `admin`）以及日志中输出的初始密码登录，即可通过 Web 界面管理证书的签发、吊销及审计日志。
 
 6. 若需在 Windows 上运行离线工具，可执行：
 
@@ -183,6 +183,6 @@ internal/
 
 ## 后续工作
 
-- 补齐 Web UI（HTMX/Tailwind）并集成 WebAuthn/TOTP。
+- 补齐 Web UI（HTMX/Tailwind）并集成 WebAuthn/密码登录。
 - 实现 CRL/OCSP、证书吊销与审计哈希链。
 - 引入 ACME v2 接口实现自动化续期。

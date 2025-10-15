@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | `pki-offline` | CLI 工具（离线） | 初始化根 CA、签发/更新中级 CA、导出证书链与策略模板 |
 | `ca-core` | 在线签发引擎 | 管理中级 CA、处理 CSR、签发/吊销终端证书、生成 CRL/OCSP、与 HSM 交互 |
-| `web-ui` | 本地管理界面 | HTTPS 管理入口，提供 WebAuthn/TOTP 登录、证书生命周期管理、审计与健康度查看 |
+| `web-ui` | 本地管理界面 | HTTPS 管理入口，提供 WebAuthn/密码登录、证书生命周期管理、审计与健康度查看 |
 | `jobs` | 后台任务 | 定时滚动 CRL、刷新 OCSP 缓存、清理过期证书与审计归档 |
 | `db` | 状态存储 | SQLite（开发）/PostgreSQL（扩展）保存 CA、证书、用户、审计等数据 |
 | `hsm` | 密钥模块 | SoftHSM v2 / TPM；存放中级 CA 密钥并提供 PKCS#11 接口 |
@@ -20,7 +20,7 @@
 ## 3. 安全基线
 - 密钥算法：根 CA 使用 ECDSA P-384（或 RSA-4096），中级 CA ECDSA P-256/P-384，终端默认为 ECDSA P-256。
 - 根 CA 永久离线，线上服务仅持有中级 CA 证书与 HSM 引用。
-- Web UI 强制 HTTPS，采用 WebAuthn（首选）或强口令 + TOTP 双因素；启用 CSRF Token、严格 CSP、SameSite=Strict Cookie。
+- Web UI 强制 HTTPS，采用 WebAuthn（首选）或本地账户密码；启用 CSRF Token、严格 CSP、SameSite=Strict Cookie。
 - 证书策略：终端证书有效期默认 90 天，SAN 必填，序列号 128 bit 随机，正确配置 SKI/AKI、AIA、CRLDP。
 - 审计日志采用链式哈希，记录所有关键操作；数据库与 SoftHSM 数据目录均需加密备份。
 
@@ -44,7 +44,7 @@
 - `cas(id, type, subject, ski, aki, cert_pem, status, not_before, not_after, path_len, hsm_slot)`
 - `certs(id, serial, subject, san, issuer_id, profile, not_before, not_after, status, pem)`
 - `revocations(id, cert_id, reason, revoked_at, crl_number)`
-- `users(id, username, passkey_credential, totp_secret, role, locked)`
+- `users(id, username, passkey_credential, password_hash, role, locked)`
 - `audit_logs(id, ts, actor, action, target, ip, prev_hash, hash)`
 - `profiles(id, name, eku, ku, validity_days, key_algo, constraints_json)`
 - `ocsp_cache(cert_serial, status, this_update, next_update, response_der)`
@@ -54,12 +54,12 @@
 - **数据库**：SQLite（WAL 模式）；未来可切换 PostgreSQL。
 - **密钥模块**：SoftHSM v2（开发默认），预留 PKCS#11 抽象以支持 YubiHSM 2 等设备。
 - **前端**：Go HTML 模板 + HTMX/Alpine.js（轻量交互），TailwindCSS（构建时生成静态 CSS）。
-- **身份验证**：WebAuthn Passkey，备选 TOTP（`go-webauthn`, `pquerna/otp`）。
+- **身份验证**：WebAuthn Passkey，备选本地密码登录。
 
 ## 7. 迭代路线（MVP → 增强）
 1. **阶段 0**：完成离线 CLI 原型（根 CA 初始化、中级 CSR 签发）。
 2. **阶段 1**：实现 `ca-core` REST API（证书签发、吊销、CRL、OCSP）。
-3. **阶段 2**：搭建仅本地访问的 Web UI，集成 WebAuthn/TOTP 登录、CSR 上传与证书管理页面。
+3. **阶段 2**：搭建仅本地访问的 Web UI，集成 WebAuthn/密码登录、CSR 上传与证书管理页面。
 4. **阶段 3**：补齐审计日志链式哈希、备份策略、SoftHSM 初始化脚本。
 5. **阶段 4**（增强）：引入 ACME v2、RBAC、证书模板 YAML 配置、系统健康监控仪表盘。
 

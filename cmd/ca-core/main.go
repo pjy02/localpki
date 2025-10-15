@@ -103,10 +103,10 @@ func main() {
 		Origins: cfg.Security.RPOrigins,
 	}
 
-	if account, created, err := store.EnsureAdminUser(context.Background(), server.GenerateTOTPSecret); err == nil {
+	if _, created, password, err := store.EnsureAdminUser(context.Background(), server.GenerateBootstrapPassword); err == nil {
 		if created {
-			api.SetBootstrapSecret(account.TOTPSecret)
-			log.Printf("bootstrap admin TOTP secret: %s", account.TOTPSecret)
+			api.SetBootstrapPassword(password)
+			log.Printf("bootstrap admin password: %s", password)
 		}
 	} else {
 		log.Fatalf("ensure admin user: %v", err)

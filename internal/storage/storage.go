@@ -79,11 +79,11 @@ type AuditRecord struct {
 }
 
 type UserRecord struct {
-	Username    string    `json:"username"`
-	DisplayName string    `json:"display_name"`
-	Role        string    `json:"role"`
-	TOTPSecret  string    `json:"totp_secret"`
-	CreatedAt   time.Time `json:"created_at"`
+	Username     string    `json:"username"`
+	DisplayName  string    `json:"display_name"`
+	Role         string    `json:"role"`
+	PasswordHash string    `json:"password_hash"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type WebAuthnCredential struct {
@@ -548,28 +548,32 @@ func (s *Store) ListAudit(ctx context.Context, limit int) ([]AuditRecord, error)
 	return out, nil
 }
 
-func (s *Store) EnsureAdminUser(ctx context.Context, secretGenerator func() (string, error)) (*UserRecord, bool, error) {
+func (s *Store) EnsureAdminUser(ctx context.Context, passwordGenerator func() (string, error)) (*UserRecord, bool, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if user, ok := s.users["admin"]; ok {
-		return user, false, nil
+		return user, false, "", nil
 	}
-	secret, err := secretGenerator()
+	password, err := passwordGenerator()
 	if err != nil {
-		return nil, false, err
+		return nil, false, "", err
+	}
+	hash, err := HashPassword(password)
+	if err != nil {
+		return nil, false, "", err
 	}
 	user := &UserRecord{
-		Username:    "admin",
-		DisplayName: "Administrator",
-		Role:        "admin",
-		TOTPSecret:  secret,
-		CreatedAt:   time.Now().UTC(),
+		Username:     "admin",
+		DisplayName:  "Administrator",
+		Role:         "admin",
+		PasswordHash: hash,
+		CreatedAt:    time.Now().UTC(),
 	}
 	s.users[user.Username] = user
 	if err := s.saveUsersLocked(); err != nil {
-		return nil, false, err
+		return nil, false, "", err
 	}
-	return user, true, nil
+	return user, true, password, nil
 }
 
 func (s *Store) GetUser(ctx context.Context, username string) (*UserRecord, bool, error) {
@@ -583,14 +587,14 @@ func (s *Store) GetUser(ctx context.Context, username string) (*UserRecord, bool
 	return &clone, true, nil
 }
 
-func (s *Store) UpdateTOTPSecret(ctx context.Context, username, secret string) error {
+func (s *Store) UpdatePasswordHash(ctx context.Context, username, hash string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	user, ok := s.users[username]
 	if !ok {
 		return fmt.Errorf("user %s not found", username)
 	}
-	user.TOTPSecret = secret
+	user.PasswordHash = hash
 	return s.saveUsersLocked()
 }
 
