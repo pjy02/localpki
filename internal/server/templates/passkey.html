@@ -1,0 +1,28 @@
+{{define "passkey"}}{{template "layout" .}}{{end}}
+{{define "body"}}
+<div class="max-w-2xl mx-auto bg-slate-900/70 border border-slate-800 rounded-xl shadow p-6 space-y-4">
+  <a href="/ui" class="text-sm text-emerald-300">← 返回控制面板</a>
+  <h1 class="text-2xl font-semibold">Passkey 管理</h1>
+  <p class="text-sm text-slate-300">注册 WebAuthn Passkey 以实现无密码登录。</p>
+  <div class="space-y-2 text-sm">
+    <p><span class="font-semibold text-emerald-200">当前账户:</span> {{.Username}}</p>
+    <p><span class="font-semibold text-emerald-200">已注册凭据:</span> {{len .Credentials}}</p>
+  </div>
+  <div class="space-y-3">
+    <button id="register-passkey" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-4 py-2 rounded-md" data-begin="/auth/webauthn/begin-register" data-finish="/auth/webauthn/finish-register">注册新的 Passkey</button>
+    <ul class="text-sm text-slate-300 space-y-2">
+      {{range .Credentials}}
+      <li class="border border-slate-800 rounded-md px-3 py-2">ID: <span class="font-mono text-xs break-all">{{.ID}}</span> · 注册时间 {{formatTime .CreatedAt}}</li>
+      {{else}}
+      <li class="text-slate-500">尚未注册 Passkey。</li>
+      {{end}}
+    </ul>
+  </div>
+</div>
+<script>
+const button=document.getElementById('register-passkey');
+if(button){
+  button.addEventListener('click',()=>beginPasskey(button));
+}
+</script>
+{{end}}

@@ -13,6 +13,8 @@ type Config struct {
 	Database     Database           `json:"database"`
 	Intermediate Intermediate       `json:"intermediate"`
 	Profiles     map[string]Profile `json:"profiles"`
+	Security     Security           `json:"security"`
+	ACME         ACMEConfig         `json:"acme"`
 }
 
 // TLSConfig holds HTTPS certificate options for the management UI/API.
@@ -44,6 +46,21 @@ type Profile struct {
 	AllowClientAuth bool     `json:"allow_client_auth"`
 }
 
+// Security configures WebAuthn and session handling.
+type Security struct {
+	RPName         string   `json:"rp_name"`
+	RPID           string   `json:"rp_id"`
+	RPOrigins      []string `json:"rp_origins"`
+	SessionMinutes int      `json:"session_minutes"`
+}
+
+// ACMEConfig controls the optional ACME service.
+type ACMEConfig struct {
+	Enabled        bool   `json:"enabled"`
+	BasePath       string `json:"base_path"`
+	DefaultProfile string `json:"default_profile"`
+}
+
 // Load reads a configuration file (JSON syntax; JSON 也是合法 YAML)。
 func Load(path string) (*Config, error) {
 	data, err := ioutil.ReadFile(path)
@@ -62,6 +79,24 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Profiles == nil {
 		cfg.Profiles = make(map[string]Profile)
+	}
+	if cfg.Security.RPName == "" {
+		cfg.Security.RPName = "LocalPKI"
+	}
+	if cfg.Security.RPID == "" {
+		cfg.Security.RPID = "localhost"
+	}
+	if len(cfg.Security.RPOrigins) == 0 {
+		cfg.Security.RPOrigins = []string{"https://localhost:8443"}
+	}
+	if cfg.Security.SessionMinutes <= 0 {
+		cfg.Security.SessionMinutes = 30
+	}
+	if cfg.ACME.BasePath == "" {
+		cfg.ACME.BasePath = "/acme/local"
+	}
+	if cfg.ACME.DefaultProfile == "" {
+		cfg.ACME.DefaultProfile = cfg.Intermediate.DefaultProfile
 	}
 	return &cfg, nil
 }

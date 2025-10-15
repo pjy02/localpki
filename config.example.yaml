@@ -27,5 +27,16 @@
       "key_usage": ["digitalSignature"],
       "ext_key_usage": ["clientAuth"]
     }
+  },
+  "security": {
+    "rp_name": "LocalPKI",
+    "rp_id": "localhost",
+    "rp_origins": ["https://localhost:8443"],
+    "session_minutes": 30
+  },
+  "acme": {
+    "enabled": true,
+    "base_path": "/acme/local",
+    "default_profile": "server-tls"
   }
 }
