@@ -12,52 +12,106 @@
 
 设计背景、组件划分与安全基线详见 [docs/architecture-overview.md](docs/architecture-overview.md)。
 
+## 系统要求
+
+- Go 1.21 及以上版本（推荐使用最新稳定版）。
+- OpenSSL 1.1+（用于生成 CSR/密钥，可根据安全策略替换为 `step`、`cfssl` 等工具）。
+- 一台用于保存根 CA 的离线环境，以及一台运行在线签发服务的受控主机。
+
 ## 快速开始
 
-1. **准备离线根 CA**
+1. **准备目录结构**
 
    ```bash
-   go run ./cmd/pki-offline init-root --subject "CN=Local Root CA" --cert secrets/root.crt --key secrets/root.key
+   mkdir -p secrets data logs
+   chmod 700 secrets data logs
    ```
 
-2. **生成中级 CA CSR（示例使用 OpenSSL）并离线签发**
+   `secrets/` 用于保存根/中级私钥，`data/` 存放中间产物（CSR、证书链等），`logs/` 保存审计日志。
+
+2. **初始化离线根 CA**
+
+   在隔离环境执行：
 
    ```bash
-   # 在计划上线的机器上生成中级密钥与 CSR
-   openssl ecparam -name prime256v1 -genkey -noout -out data/intermediate.key
-   openssl req -new -key data/intermediate.key -out data/intermediate.csr -subj "/CN=Local Intermediate CA"
+   go run ./cmd/pki-offline init-root \
+     --subject "CN=Local Root CA" \
+     --cert secrets/root.crt \
+     --key secrets/root.key
+   ```
 
-   # 在离线环境使用根 CA 签发中级证书
-   go run ./cmd/pki-offline sign-ica --csr data/intermediate.csr --root-cert secrets/root.crt --root-key secrets/root.key --out data/intermediate.crt
+   如需设定有效期或密钥算法，可通过 `--not-after`、`--key-type` 等参数调整，详见 `pki-offline --help`。
+
+3. **生成中级 CA CSR 并离线签发**
+
+   ```bash
+   # 在线环境：生成中级密钥与 CSR
+   openssl ecparam -name prime256v1 -genkey -noout -out secrets/intermediate.key
+   openssl req -new -key secrets/intermediate.key \
+     -out data/intermediate.csr \
+     -subj "/CN=Local Intermediate CA"
+
+   # 离线环境：使用根 CA 签发中级证书
+   go run ./cmd/pki-offline sign-ica \
+     --csr data/intermediate.csr \
+     --root-cert secrets/root.crt \
+     --root-key secrets/root.key \
+     --out data/intermediate.crt
    cat secrets/root.crt data/intermediate.crt > data/chain.pem
    ```
 
-3. **配置并启动在线签发服务**
+   若需要为中级私钥设置密码，可在生成时使用 `openssl ec -aes256`，并在后续配置中提供密码。
+
+4. **配置在线签发服务**
 
    ```bash
    cp config.example.yaml config.yaml
-   mkdir -p data
    go run ./cmd/ca-core --config config.yaml --generate-ui-cert
    ```
 
-   启动后访问 `https://127.0.0.1:8443/api/v1/health` 即可验证运行状态。`--generate-ui-cert` 仅在首次运行时为 `localhost` 生成临时证书，生产环境应使用中级 CA 为 UI 颁发证书。若中级私钥为加密 PEM，可在 `config.yaml` 的 `intermediate.key_password` 中写入密码。
+   默认配置示例涵盖 `server-tls`、`client-mtls` 等模板，可按需扩展。`--generate-ui-cert` 会为本地开发生成临时 UI 证书，生产环境应替换为由中级 CA 签发的正式证书。
 
-4. **签发终端证书**
+5. **健康检查与 API 调用**
 
-   ```bash
-   curl -k https://127.0.0.1:8443/api/v1/certificates/sign \
-     -H "Content-Type: application/json" \
-     -d '{"csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...", "profile": "server-tls"}'
-   ```
+   - 访问 `https://127.0.0.1:8443/api/v1/health` 验证服务状态。
+   - 通过 REST API 签发终端证书：
 
-   返回结果包含叶子证书与完整链（PEM 编码）。
+     ```bash
+     curl -k https://127.0.0.1:8443/api/v1/certificates/sign \
+       -H "Content-Type: application/json" \
+       -d '{"csr_pem": "-----BEGIN CERTIFICATE REQUEST-----...", "profile": "server-tls"}'
+     ```
+
+     返回结果包含叶子证书与完整链（PEM 编码）。
+
+## 配置要点
+
+`config.yaml` 提供以下关键字段：
+
+| 字段 | 说明 |
+| ---- | ---- |
+| `listen_addr` | 监听地址，默认 `127.0.0.1:8443`，生产可放置在反向代理之后。 |
+| `intermediate.cert` / `intermediate.key` | 中级 CA 证书及私钥路径。若密钥加密，请在 `intermediate.key_password` 写入密码。 |
+| `profiles` | 证书模板集合，定义有效期、Key Usage、Extended Key Usage 等策略。 |
+| `audit.log_path` | 审计日志输出路径，默认 JSONL，每条记录包含请求 ID、序列号、调用者信息。 |
+| `ui.tls` | Web UI 证书配置，可指向中级 CA 为 UI/REST 颁发的证书链。 |
+
+更多字段说明可参考 [docs/configuration.md](docs/configuration.md)（若不存在，可根据 `config.example.yaml` 推断并补充）。
+
+## 运维建议
+
+- 为在线服务配置系统级守护进程（systemd、supervisord），并定期轮换审计日志。
+- 使用防火墙限制访问源，仅允许受信任主机调用 REST API。
+- 建议配合 Vault、age 等工具对私钥进行静态加密管理。
+- 定期验证证书吊销机制（计划支持 CRL/OCSP）以及策略模板是否符合监管要求。
 
 ## 开发说明
 
-- 项目使用 Go 语言，默认将证书审计信息写入 JSONL 文件，后续可替换为数据库（SQLite/PostgreSQL）。
-- 测试可通过 `go test ./...` 运行。
+- 项目使用 Go 语言，建议先运行 `go mod download` 以拉取依赖。
+- 单元测试可通过 `go test ./...` 运行，亦可结合 `-race`、`-cover` 获取更详细的质量指标。
+- 默认将证书审计信息写入 JSONL 文件，后续可替换为数据库（SQLite/PostgreSQL）。
 - 数据文件与密钥建议存放在 `data/` 与 `secrets/` 目录，并设置为 0700 权限。
-- 配置文件 `config.yaml` 使用 JSON 语法（JSON 亦是 YAML 1.2 的合法子集），可根据示例按需调整。
+- 推荐使用 `golangci-lint`、`buf` 等工具进行额外的静态检查（可在 CI 中集成）。
 
 ## 目录结构
 
