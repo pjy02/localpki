@@ -139,7 +139,8 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		username := strings.TrimSpace(r.FormValue("username"))
-		code := strings.TrimSpace(r.FormValue("totp"))
+		rawCode := r.FormValue("totp")
+		code := normalizeTOTPCode(rawCode)
 		if username == "" || code == "" {
 			a.renderLoginError(w, "请输入用户名与动态码")
 			return
@@ -150,7 +151,7 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 			a.renderLoginError(w, "认证失败")
 			return
 		}
-		if !totpValidate(user.TOTPSecret, code, time.Now()) {
+		if !totpValidate(user.TOTPSecret, rawCode, time.Now()) {
 			time.Sleep(500 * time.Millisecond)
 			a.renderLoginError(w, "动态码无效")
 			return
@@ -443,9 +444,14 @@ func (a *API) handleTOTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "请求无效", http.StatusBadRequest)
 			return
 		}
-		code := r.FormValue("totp")
+		rawCode := r.FormValue("totp")
+		code := normalizeTOTPCode(rawCode)
 		secret := string(secretBytes)
-		if !totpValidate(secret, code, time.Now()) {
+		if code == "" {
+			http.Error(w, "动态码无效", http.StatusBadRequest)
+			return
+		}
+		if !totpValidate(secret, rawCode, time.Now()) {
 			http.Error(w, "动态码无效", http.StatusBadRequest)
 			return
 		}

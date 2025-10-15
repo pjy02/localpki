@@ -32,8 +32,14 @@
     <div class="bg-white p-3 rounded-md">
       <img src="{{.QRCode}}" alt="TOTP QR Code" class="mx-auto">
     </div>
+    {{else}}
+    <div class="bg-slate-800 border border-slate-700 text-center rounded-md p-2 text-xs text-slate-300">暂无二维码，请手动输入密钥。</div>
+    {{end}}
+    {{if .Secret}}
+    <p class="text-xs"><span class="font-semibold text-emerald-200">密钥:</span> <span class="font-mono break-all text-slate-100">{{.Secret}}</span></p>
     {{end}}
     <p class="break-all text-xs text-slate-400">{{.ProvisioningURL}}</p>
+    <p class="text-xs text-slate-400">如仍无法登录，请确保服务器与手机时间同步。</p>
   </div>
   {{end}}
 </div>

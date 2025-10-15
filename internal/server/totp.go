@@ -16,6 +16,15 @@ const (
 	totpDigits = 6
 )
 
+var totpWindowSteps = []int{-2, -1, 0, 1, 2}
+
+func normalizeTOTPCode(code string) string {
+	code = strings.TrimSpace(code)
+	code = strings.ReplaceAll(code, " ", "")
+	code = strings.ReplaceAll(code, "-", "")
+	return code
+}
+
 func generateTOTPSecret() (string, error) {
 	buf := make([]byte, 20)
 	if _, err := crand.Read(buf); err != nil {
@@ -31,19 +40,24 @@ func GenerateTOTPSecret() (string, error) {
 }
 
 func totpValidate(secret, code string, now time.Time) bool {
+	code = normalizeTOTPCode(code)
 	if len(code) != totpDigits {
 		return false
 	}
 	if secret == "" {
 		return false
 	}
+	for _, r := range code {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
 	enc := base32.StdEncoding.WithPadding(base32.NoPadding)
 	key, err := enc.DecodeString(strings.ToUpper(secret))
 	if err != nil {
 		return false
 	}
-	steps := []int{-1, 0, 1}
-	for _, s := range steps {
+	for _, s := range totpWindowSteps {
 		counter := uint64(math.Floor(float64(now.Unix())/totpPeriod)) + uint64(s)
 		if hotp(key, counter) == code {
 			return true
