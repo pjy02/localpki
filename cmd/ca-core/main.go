@@ -30,11 +30,29 @@ import (
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to configuration file")
 	generateTLS := flag.Bool("generate-ui-cert", false, "generate ephemeral TLS certificate for localhost")
+	demoMode := flag.Bool("demo", false, "start with an auto-generated demo CA (no config file needed)")
 	flag.Parse()
 
-	cfg, err := config.Load(*configPath)
-	if err != nil {
-		log.Fatalf("load config: %v", err)
+	var (
+		cfg      *config.Config
+		demoInfo *demoEnvironment
+		err      error
+	)
+	if *demoMode {
+		if *generateTLS {
+			log.Println("--generate-ui-cert is ignored in demo mode; demo certificates are created automatically")
+		}
+		cfg, demoInfo, err = setupDemoEnvironment()
+		if err != nil {
+			log.Fatalf("setup demo: %v", err)
+		}
+		log.Printf("demo mode: temporary data stored in %s", demoInfo.baseDir)
+		log.Printf("demo mode: trust the root certificate at %s", demoInfo.rootCertPath)
+	} else {
+		cfg, err = config.Load(*configPath)
+		if err != nil {
+			log.Fatalf("load config: %v", err)
+		}
 	}
 
 	if *generateTLS {
