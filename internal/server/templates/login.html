@@ -3,7 +3,7 @@
 <div class="max-w-md mx-auto bg-slate-900/70 rounded-xl shadow-lg p-8 space-y-6">
   <div>
     <h1 class="text-2xl font-semibold">LocalPKI 管理登录</h1>
-    <p class="text-sm text-slate-300 mt-1">使用 TOTP 或 WebAuthn Passkey 进行安全登录。</p>
+    <p class="text-sm text-slate-300 mt-1">使用密码或 WebAuthn Passkey 进行安全登录。</p>
   </div>
   {{if .Flash}}
   <div class="bg-red-500/20 border border-red-500/40 text-sm text-red-200 rounded-md px-3 py-2">{{.Flash}}</div>
@@ -15,8 +15,8 @@
       <input class="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 focus:outline-none focus:ring focus:ring-emerald-500/40" name="username" id="username" autocomplete="username" required>
     </div>
     <div>
-      <label class="block text-sm font-medium mb-1" for="totp">TOTP 动态码</label>
-      <input class="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 focus:outline-none focus:ring focus:ring-emerald-500/40" name="totp" id="totp" inputmode="numeric" pattern="[0-9]{6}" placeholder="000000">
+      <label class="block text-sm font-medium mb-1" for="password">密码</label>
+      <input class="w-full rounded-md bg-slate-800 border border-slate-700 px-3 py-2 focus:outline-none focus:ring focus:ring-emerald-500/40" type="password" name="password" id="password" autocomplete="current-password" required>
     </div>
     <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold rounded-md py-2 transition">登录</button>
   </form>
@@ -24,22 +24,11 @@
     <h2 class="text-sm font-semibold uppercase tracking-widest text-slate-300">或使用 Passkey</h2>
     <button id="passkey-login" class="w-full border border-emerald-400/60 text-emerald-200 hover:bg-emerald-500/10 rounded-md py-2" data-begin="/auth/webauthn/begin-login" data-finish="/auth/webauthn/finish-login">使用 Passkey 登录</button>
   </div>
-  {{if .ProvisioningURL}}
+  {{if .BootstrapPassword}}
   <div class="border border-slate-700 rounded-md p-3 text-sm space-y-2">
     <p class="font-semibold text-emerald-300">首次使用？</p>
-    <p>扫描下方二维码或手动添加密钥以配置 TOTP：</p>
-    {{if .QRCode}}
-    <div class="bg-white p-3 rounded-md">
-      <img src="{{.QRCode}}" alt="TOTP QR Code" class="mx-auto">
-    </div>
-    {{else}}
-    <div class="bg-slate-800 border border-slate-700 text-center rounded-md p-2 text-xs text-slate-300">暂无二维码，请手动输入密钥。</div>
-    {{end}}
-    {{if .Secret}}
-    <p class="text-xs"><span class="font-semibold text-emerald-200">密钥:</span> <span class="font-mono break-all text-slate-100">{{.Secret}}</span></p>
-    {{end}}
-    <p class="break-all text-xs text-slate-400">{{.ProvisioningURL}}</p>
-    <p class="text-xs text-slate-400">如仍无法登录，请确保服务器与手机时间同步。</p>
+    <p>使用以下初始密码登录后，请前往“密码设置”页面立即修改：</p>
+    <p class="text-xs"><span class="font-semibold text-emerald-200">初始密码:</span> <span class="font-mono break-all text-slate-100">{{.BootstrapPassword}}</span></p>
   </div>
   {{end}}
 </div>

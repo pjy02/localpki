@@ -40,18 +40,18 @@ type contextKey string
 
 // API bundles dependencies required to serve HTTP requests.
 type API struct {
-	Signer          *pki.Signer
-	Profiles        map[string]pki.Profile
-	DefaultProfile  string
-	Store           *storage.Store
-	Sessions        *SessionManager
-	Templates       *template.Template
-	RP              RelyingPartyConfig
-	SessionDuration time.Duration
-	ACME            *acme.Server
-	bootstrapSecret string
-	loginChallenges map[string]webAuthnChallenge
-	loginMu         sync.Mutex
+	Signer            *pki.Signer
+	Profiles          map[string]pki.Profile
+	DefaultProfile    string
+	Store             *storage.Store
+	Sessions          *SessionManager
+	Templates         *template.Template
+	RP                RelyingPartyConfig
+	SessionDuration   time.Duration
+	ACME              *acme.Server
+	bootstrapPassword string
+	loginChallenges   map[string]webAuthnChallenge
+	loginMu           sync.Mutex
 }
 
 // RelyingPartyConfig describes WebAuthn Relying Party properties.
@@ -79,7 +79,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/ui/certificates/sign", a.requireAuth(a.handleSignUI))
 	mux.HandleFunc("/ui/certificates/revoke", a.requireAuth(a.handleRevokeUI))
 	mux.HandleFunc("/ui/audit", a.requireAuth(a.handleAudit))
-	mux.HandleFunc("/ui/totp", a.requireAuth(a.handleTOTP))
+	mux.HandleFunc("/ui/password", a.requireAuth(a.handlePassword))
 	mux.HandleFunc("/ui/passkey", a.requireAuth(a.handlePasskey))
 	mux.HandleFunc("/auth/webauthn/begin-register", a.requireAuth(a.handleBeginRegister))
 	mux.HandleFunc("/auth/webauthn/finish-register", a.requireAuth(a.handleFinishRegister))
@@ -123,10 +123,8 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 		data := map[string]interface{}{
 			"CSRF": token,
 		}
-		if a.bootstrapSecret != "" {
-			url := totpProvisioningURL(a.bootstrapSecret, "admin")
-			data["ProvisioningURL"] = url
-			data["Secret"] = a.bootstrapSecret
+		if a.bootstrapPassword != "" {
+			data["BootstrapPassword"] = a.bootstrapPassword
 		}
 		a.render(w, "login", data)
 	case http.MethodPost:
@@ -139,10 +137,9 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		username := strings.TrimSpace(r.FormValue("username"))
-		rawCode := r.FormValue("totp")
-		code := normalizeTOTPCode(rawCode)
-		if username == "" || code == "" {
-			a.renderLoginError(w, "请输入用户名与动态码")
+		password := r.FormValue("password")
+		if username == "" || password == "" {
+			a.renderLoginError(w, "请输入用户名与密码")
 			return
 		}
 		user, ok, err := a.Store.GetUser(r.Context(), username)
@@ -151,17 +148,17 @@ func (a *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 			a.renderLoginError(w, "认证失败")
 			return
 		}
-		if !totpValidate(user.TOTPSecret, rawCode, time.Now()) {
+		if !storage.VerifyPassword(user.PasswordHash, password) {
 			time.Sleep(500 * time.Millisecond)
-			a.renderLoginError(w, "动态码无效")
+			a.renderLoginError(w, "用户名或密码错误")
 			return
 		}
-		a.bootstrapSecret = ""
+		a.bootstrapPassword = ""
 		token, sess := a.Sessions.Create(username, a.SessionDuration)
 		csrf := randomToken(16)
 		sess.Values["csrf"] = []byte(csrf)
 		a.setSessionCookie(w, token, sess.Expires)
-		a.audit(r, username, "login_totp", "", nil)
+		a.audit(r, username, "login_password", "", nil)
 		http.Redirect(w, r, "/ui", http.StatusFound)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -413,54 +410,57 @@ func (a *API) revokeCertificate(ctx context.Context, serial string) (storage.Cer
 	return updated, nil
 }
 
-func (a *API) handleTOTP(w http.ResponseWriter, r *http.Request) {
+func (a *API) handlePassword(w http.ResponseWriter, r *http.Request) {
 	sess := r.Context().Value(contextKey("session")).(*session)
 	switch r.Method {
 	case http.MethodGet:
-		secret, err := generateTOTPSecret()
-		if err != nil {
-			http.Error(w, "无法生成密钥", http.StatusInternalServerError)
-			return
-		}
-		sess.Values["pending_totp"] = []byte(secret)
 		data := map[string]interface{}{
-			"Secret":          secret,
-			"ProvisioningURL": totpProvisioningURL(secret, sess.Username),
-			"Username":        sess.Username,
-			"CSRF":            a.ensureSessionCSRF(sess),
+			"CSRF": a.ensureSessionCSRF(sess),
 		}
-		a.render(w, "totp", data)
+		a.render(w, "password", data)
 	case http.MethodPost:
 		if !a.verifyCSRF(r, sess) {
 			http.Error(w, "csrf invalid", http.StatusBadRequest)
-			return
-		}
-		secretBytes, ok := sess.Values["pending_totp"]
-		if !ok {
-			http.Error(w, "未生成新的密钥", http.StatusBadRequest)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "请求无效", http.StatusBadRequest)
 			return
 		}
-		rawCode := r.FormValue("totp")
-		code := normalizeTOTPCode(rawCode)
-		secret := string(secretBytes)
-		if code == "" {
-			http.Error(w, "动态码无效", http.StatusBadRequest)
+		current := r.FormValue("current_password")
+		newPassword := r.FormValue("new_password")
+		confirm := r.FormValue("confirm_password")
+		if current == "" || newPassword == "" {
+			http.Error(w, "密码不能为空", http.StatusBadRequest)
 			return
 		}
-		if !totpValidate(secret, rawCode, time.Now()) {
-			http.Error(w, "动态码无效", http.StatusBadRequest)
+		if len(newPassword) < 12 {
+			http.Error(w, "新密码至少需要 12 位", http.StatusBadRequest)
 			return
 		}
-		if err := a.Store.UpdateTOTPSecret(r.Context(), sess.Username, secret); err != nil {
-			http.Error(w, "更新失败", http.StatusInternalServerError)
+		if newPassword != confirm {
+			http.Error(w, "两次输入的密码不一致", http.StatusBadRequest)
 			return
 		}
-		delete(sess.Values, "pending_totp")
-		a.audit(r, sess.Username, "totp_rotate", "", nil)
+		user, ok, err := a.Store.GetUser(r.Context(), sess.Username)
+		if err != nil || !ok {
+			http.Error(w, "用户不存在", http.StatusInternalServerError)
+			return
+		}
+		if !storage.VerifyPassword(user.PasswordHash, current) {
+			http.Error(w, "当前密码不正确", http.StatusBadRequest)
+			return
+		}
+		hash, err := storage.HashPassword(newPassword)
+		if err != nil {
+			http.Error(w, "无法更新密码", http.StatusInternalServerError)
+			return
+		}
+		if err := a.Store.UpdatePasswordHash(r.Context(), sess.Username, hash); err != nil {
+			http.Error(w, "无法更新密码", http.StatusInternalServerError)
+			return
+		}
+		a.audit(r, sess.Username, "password_rotate", "", nil)
 		http.Redirect(w, r, "/ui", http.StatusFound)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -889,9 +889,9 @@ func (a *API) Shutdown(ctx context.Context) error {
 	return a.Store.Close()
 }
 
-// SetBootstrapSecret records the initial TOTP secret for UI display.
-func (a *API) SetBootstrapSecret(secret string) {
-	a.bootstrapSecret = secret
+// SetBootstrapPassword records the initial password for UI display.
+func (a *API) SetBootstrapPassword(password string) {
+	a.bootstrapPassword = password
 }
 func respondJSON(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
