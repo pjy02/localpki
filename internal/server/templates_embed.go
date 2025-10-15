@@ -4,7 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"html/template"
-	"path/filepath"
+	"path"
 	"strings"
 	"time"
 )
@@ -43,7 +43,7 @@ func LoadTemplates() (*template.Template, error) {
 		if !strings.HasSuffix(name, ".html") {
 			continue
 		}
-		content, err := templateFS.ReadFile(filepath.Join("templates", name))
+		content, err := templateFS.ReadFile(path.Join("templates", name))
 		if err != nil {
 			return nil, err
 		}
@@ -61,7 +61,7 @@ func LoadTemplates() (*template.Template, error) {
 			if !strings.HasSuffix(name, ".html") {
 				continue
 			}
-			content, err := templateFS.ReadFile(filepath.Join("templates/partials", name))
+			content, err := templateFS.ReadFile(path.Join("templates/partials", name))
 			if err != nil {
 				return nil, err
 			}
