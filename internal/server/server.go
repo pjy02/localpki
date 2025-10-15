@@ -460,6 +460,7 @@ func (a *API) handlePassword(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "无法更新密码", http.StatusInternalServerError)
 			return
 		}
+		a.SetBootstrapPassword("")
 		a.audit(r, sess.Username, "password_rotate", "", nil)
 		http.Redirect(w, r, "/ui", http.StatusFound)
 	default:
