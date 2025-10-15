@@ -87,7 +87,10 @@ func Load(path string) (*Config, error) {
 		cfg.Security.RPID = "localhost"
 	}
 	if len(cfg.Security.RPOrigins) == 0 {
-		cfg.Security.RPOrigins = []string{"https://localhost:8443"}
+		cfg.Security.RPOrigins = []string{
+			"https://localhost:8443",
+			"https://127.0.0.1:8443",
+		}
 	}
 	if cfg.Security.SessionMinutes <= 0 {
 		cfg.Security.SessionMinutes = 30
